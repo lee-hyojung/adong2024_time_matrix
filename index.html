@@ -65,13 +65,35 @@ h1{font-size:1.15rem;line-height:1.3;font-weight:600;margin:0 0 3px;letter-spaci
 .how{font-size:.72rem;color:var(--muted);margin:8px 0 0}
 #err{display:none;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 18px;font-size:.9rem;max-width:min(460px,calc(100vw - 40px));line-height:1.5}
 #err small{color:var(--muted);font-size:.78rem}
-@media (max-width:680px){#head{padding:11px 13px}.sub{display:none}#read{left:14px;right:14px;width:auto}}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.toggle,.rtoggle{display:none;font:inherit;font-size:.76rem;padding:5px 10px;border-radius:7px;border:1px solid var(--edge);background:var(--btn);color:var(--ink);cursor:pointer;white-space:nowrap}
+.cur{display:none;font-size:.76rem;color:var(--muted);margin:3px 0 0;line-height:1.45}
+@media (max-width:680px){
+  #head{padding:10px 12px 9px;max-height:calc(100% - 170px);overflow:auto;-webkit-overflow-scrolling:touch}
+  h1{font-size:1rem;margin:2px 0 0}
+  .toggle,.rtoggle{display:inline-block}
+  .cur{display:block}
+  #head:not(.open) #ctrl{display:none}
+  #head.open .cur{display:none}
+  #head.open #ctrl{margin-top:8px}
+  #head .sub,#head .def{display:block}
+  #legend .bar{margin-top:6px}
+  #read{left:10px;right:10px;width:auto;padding:10px 12px}
+  .rtoggle{position:absolute;top:8px;right:10px;padding:3px 8px;font-size:.72rem}
+  #readc{padding-right:78px}
+  #read.more #readc{padding-right:0}
+  #read:not(.more) .spark,#read:not(.more) .how,#read:not(.more) .cmp{display:none}
+  #read:not(.more) .stats dt:nth-of-type(n+2),#read:not(.more) .stats dd:nth-of-type(n+2){display:none}
+  #read .big{font-size:1.3rem;margin-top:4px}
+}
 </style>
 </head>
 <body>
 <svg id="map" role="img" aria-label="출발 행정동에서 일정 시간 안에 닿는 지역 지도"></svg>
 <section id="head" class="panel">
-  <h1>일정 시간 안에 닿는 곳</h1>
+  <div class="top"><h1>일정 시간 안에 닿는 곳</h1><button id="toggle" class="toggle" aria-expanded="false" aria-controls="ctrl">설정 ▾</button></div>
+  <p class="cur" id="cur"></p>
+  <div id="ctrl">
   <p class="sub">지도에서 동을 누르면 그 동에서 자동차로 기준 시간 안에 닿는 동을 보여 줘요. 2024년 행정동 경계와 인구 분포로 계산해, 연도 차이는 도로망 변화만 뜻합니다.</p>
   <div class="row"><input id="q" list="dongs" placeholder="동 이름으로 찾기 (예: 대학동)" autocomplete="off"><datalist id="dongs"></datalist></div>
   <div class="row"><p class="lab">연도</p><div class="seg" id="year" style="grid-template-columns:1fr 1fr 1.5fr">
@@ -81,12 +103,13 @@ h1{font-size:1.15rem;line-height:1.3;font-weight:600;margin:0 0 3px;letter-spaci
     <button data-v="2" aria-pressed="false">낮<small>13:00</small></button><button data-v="3" aria-pressed="false">퇴근<small>17:45</small></button></div></div>
   <div class="row"><p class="lab">기준 시간</p><div class="seg" id="thr" style="grid-template-columns:repeat(4,1fr)">
     <button data-v="30" aria-pressed="true">30분</button><button data-v="45" aria-pressed="false">45분</button><button data-v="60" aria-pressed="false">60분</button><button data-v="90" aria-pressed="false">90분</button></div></div>
-  <div id="legend"></div>
   <div class="views" role="group" aria-label="보기 범위">
     <button data-v="fit">출발 동 주변</button><button data-v="metro">수도권</button><button data-v="all">전국</button>
   </div>
+  </div>
+  <div id="legend"></div>
 </section>
-<section id="read" class="panel" aria-live="polite"><p class="how">불러오는 중…</p></section>
+<section id="read" class="panel"><button id="rtoggle" class="rtoggle" aria-expanded="false" aria-controls="readc">자세히 ▴</button><div id="readc" aria-live="polite"><p class="how">불러오는 중…</p></div></section>
 <section id="err" class="panel">지도를 불러오지 못했어요. 새로 고침해 보세요.</section>
 <!-- 지도 라이브러리: 저장소 안의 lib 폴더에서 먼저 읽고, 없을 때만 외부 서버(cdnjs)에서 받는다 -->
 <script src="lib/d3.min.js"></script>
@@ -152,7 +175,7 @@ let pendingFit=true;
 function draw(){ const r=svg.node().getBoundingClientRect(); if(r.width<50||r.height<50) return;
   if(Math.abs(r.width-W)<1&&Math.abs(r.height-H)<1) return; W=r.width; H=r.height;
   svg.attr("viewBox",`0 0 ${W} ${H}`); left=W>780?420:0; const pad=Math.min(W,H)*0.04;
-  const top=W>780?0:Math.min(360,H*0.45), bottom=W>780?0:Math.min(170,H*0.22);
+  const top=W>780?0:document.getElementById('head').offsetHeight+18, bottom=W>780?0:document.getElementById('read').offsetHeight+18;
   proj.fitExtent([[left+pad,top+pad],[W-pad,H-bottom-pad]],GEO); dongs.attr("d",path); borders.attr("d",path(MESH)); sggL.attr("d",path(SGG)); sidoC.attr("d",path(SIDO)); sidoL.attr("d",path(SIDO)); hi.attr("d",null); marker();
   if(S.row) toBox(reachBox(),0); else svg.call(zoom.transform,d3.zoomIdentity); }
 new ResizeObserver(draw).observe(svg.node()); draw();
@@ -175,7 +198,7 @@ function sums(f){ let n=0,p=0,j=0; for(let i=0;i<F;i++){ const t=f(i); if(t!=nul
 function paint(){ if(!S.row) return;
   const fc=S.year<2? (d=>tcolor(tyear(d.id))) : (d=>CC[ccat(t15(d.id),t24(d.id))]);
   dongs.style("fill",fc).style("stroke",fc); }
-function summary(){ if(!S.row) return; const o=S.origin, R=d3.select("#read");
+function summary(){ if(!S.row) return; updCur(); const o=S.origin, R=d3.select("#readc");
   const head=`<p class="name">${META.n[o]}에서 ${SL[S.slot]}에 출발</p><p class="where">${META.s[o]} ${META.g[o]}, 기준 ${S.thr}분</p>`;
   if(S.year<2){ const s=sums(tyear);
     R.html(head+`<dl class="stats"><dt>닿는 동</dt><dd>${s.n.toLocaleString()}곳</dd><dt>그 동들의 인구</dt><dd>${man(s.p)}명</dd><dt>그 동들의 일자리</dt><dd>${man(s.j)}개</dd></dl>
@@ -185,14 +208,14 @@ function summary(){ if(!S.row) return; const o=S.origin, R=d3.select("#read");
     R.html(head+`<dl class="stats"><dt>닿는 동 (2015 → 2024)</dt><dd>${a.n.toLocaleString()} → ${b.n.toLocaleString()}곳</dd><dt>늘어난 동</dt>${dd(a.n,b.n)}
     <dt>닿는 인구</dt><dd>${man(a.p)} → ${man(b.p)}명</dd><dt>닿는 일자리</dt><dd>${man(a.j)} → ${man(b.j)}개</dd><dt>새로 닿게 된 동</dt><dd class="up">${nw.toLocaleString()}곳</dd></dl>
     <p class="how">인구·일자리는 두 해 모두 2024년 값이라, 차이는 도로망 변화만 뜻해요.</p>`); } }
-function showDong(i){ const R=d3.select("#read");
+function showDong(i){ const R=d3.select("#readc");
   if(S.year<2){ const t=tyear(i); R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(t)}</p><p class="how">${META.n[S.origin]}에서 ${SL[S.slot]}에 출발, ${S.year===0?"2015":"2024"}년</p>`); }
   else { const a=t15(i), b=t24(i); const d=(a!=null&&b!=null)?a-b:null;
     R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(a)} → ${fmt(b)}</p>
     <p class="how">${d==null?"":d>=2?`${d}분 빨라졌어요`:d<=-2?`${-d}분 늘었어요`:"거의 같아요"} (${META.n[S.origin]}에서 ${SL[S.slot]}에 출발)</p>`); } }
 async function setOrigin(i,fit){ S.origin=i; marker(); history.replaceState(null,"",`#o=${i}`);
-  d3.select("#read").html(`<p class="how">${META.n[i]}의 자료를 불러오는 중…</p>`);
-  try{ S.row=await loadRow(i); }catch(e){ d3.select("#read").html(`<p class="how">자료를 불러오지 못했어요.</p>`); return; }
+  d3.select("#readc").html(`<p class="how">${META.n[i]}의 자료를 불러오는 중…</p>`);
+  try{ S.row=await loadRow(i); }catch(e){ d3.select("#readc").html(`<p class="how">자료를 불러오지 못했어요.</p>`); return; }
   if(S.origin!==i) return; paint(); summary(); if(fit) toBox(reachBox(),650); }
 // ---------- 조작
 dongs.on("pointerenter",(e,d)=>{ if(!S.row) return; hi.attr("d",path(d)); showDong(d.id); })
@@ -206,6 +229,14 @@ d3.selectAll(".views button").on("click",function(){ const v=this.dataset.v;
 const labels=META.n.map((n,i)=>`${n} (${META.g[i]}, ${META.s[i]})`);
 d3.select("#dongs").selectAll("option").data(labels).join("option").attr("value",d=>d);
 d3.select("#q").on("change",function(){ const i=labels.indexOf(this.value); if(i>=0){ setOrigin(i,true); this.blur(); } });
+const updCur=()=>{ document.getElementById('cur').textContent=`${['2015','2024','2015→2024 변화'][S.year]} · ${SL[S.slot]} · ${S.thr}분 · ${META.n[S.origin]}`; };
+const head=document.getElementById('head'), tg=document.getElementById('toggle'), mob=()=>window.matchMedia('(max-width:680px)').matches;
+const setOpen=o=>{ head.classList.toggle('open',o); tg.setAttribute('aria-expanded',String(o)); tg.textContent=o?'접기 ▴':'설정 ▾'; if(o) head.scrollTop=0; };
+tg.addEventListener('click',()=>setOpen(!head.classList.contains('open')));
+const rd=document.getElementById('read'), rt=document.getElementById('rtoggle');
+rt.addEventListener('click',()=>{ const m=!rd.classList.contains('more'); rd.classList.toggle('more',m); rt.setAttribute('aria-expanded',String(m)); rt.textContent=m?'간단히 ▾':'자세히 ▴'; });
+svg.on('pointerdown.close',()=>{ if(mob()&&head.classList.contains('open')) setOpen(false); });
+d3.select("#q").on("change.close",()=>{ if(mob()) setOpen(false); });
 legend(); await setOrigin(S.origin,false); toBox(reachBox(),0);
 })();
 </script>
