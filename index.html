@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>행정동에서 일정 시간 안에 닿는 곳 (2015·2024)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sea:#E4EBEE; --ink:#1B2A31; --muted:#56666E; --panel:rgba(255,255,255,.95); --edge:rgba(27,42,49,.14);
+  --line:rgba(255,255,255,.6); --out:#D3DADD; --nodata:#BCC4C8; --hi:#1B2A31; --btn:#FFFFFF; --btn-on:#1B2A31; --btn-on-ink:#FFFFFF;
+  --new:#2F6DB5; --lost:#C9764A; --same:#E7ECEE; --slow:#EBC3A6; --sgg:rgba(27,42,49,.5); --sido:rgba(27,42,49,.85); --casing:rgba(255,255,255,.55);
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --sea:#0E1920; --ink:#E4ECEF; --muted:#9CACB3; --panel:rgba(16,27,33,.95); --edge:rgba(228,236,239,.14);
+  --line:rgba(14,25,32,.5); --out:#26333A; --nodata:#39454A; --hi:#FFFFFF; --btn:#16252C; --btn-on:#E4ECEF; --btn-on-ink:#0E1920;
+  --new:#5B9BE6; --lost:#D58A5E; --same:#2B383E; --slow:#7A5A45; --sgg:rgba(228,236,239,.45); --sido:rgba(228,236,239,.85); --casing:rgba(14,25,32,.55); } }
+:root[data-theme="dark"]{ --sea:#0E1920; --ink:#E4ECEF; --muted:#9CACB3; --panel:rgba(16,27,33,.95); --edge:rgba(228,236,239,.14);
+  --line:rgba(14,25,32,.5); --out:#26333A; --nodata:#39454A; --hi:#FFFFFF; --btn:#16252C; --btn-on:#E4ECEF; --btn-on-ink:#0E1920;
+  --new:#5B9BE6; --lost:#D58A5E; --same:#2B383E; --slow:#7A5A45; --sgg:rgba(228,236,239,.45); --sido:rgba(228,236,239,.85); --casing:rgba(14,25,32,.55); }
+html,body{height:100%;min-height:600px;margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--sea);color:var(--ink);overflow:hidden;position:relative}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer}
+.dong{stroke-width:.6px;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+#borders{fill:none;stroke:var(--line);stroke-width:.45px;vector-effect:non-scaling-stroke;stroke-linejoin:round;pointer-events:none}
+#hi{fill:none;stroke:#E09A12;stroke-width:2.6px;vector-effect:non-scaling-stroke;stroke-linejoin:round;pointer-events:none}   /* 마우스를 올린 동: 시도 경계와 헷갈리지 않는 호박색 */
+.lvl{fill:none;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;pointer-events:none}
+#sgg{stroke:var(--sgg);stroke-width:.9px}
+#sidoCase{stroke:var(--casing);stroke-width:3.2px}
+#sido{stroke:var(--sido);stroke-width:1.5px}
+.ln{display:inline-block;width:18px;height:0;border-top:1px solid;vertical-align:middle}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--edge);border-radius:10px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#head{top:calc(env(safe-area-inset-top,0px) + 14px);left:14px;padding:15px 17px 13px;width:min(390px,calc(100vw - 28px))}
+h1{font-size:1.15rem;line-height:1.3;font-weight:600;margin:0 0 3px;letter-spacing:-.01em}
+.sub{font-size:.76rem;color:var(--muted);margin:0 0 10px;line-height:1.5}
+.row{margin:0 0 8px}
+.lab{font-size:.7rem;color:var(--muted);margin:0 0 3px}
+.seg{display:grid;border:1px solid var(--edge);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 2px;background:var(--btn);color:var(--ink);font:inherit;font-size:.8rem;cursor:pointer}
+.seg button + button{border-left:1px solid var(--edge)}
+.seg button[aria-pressed="true"]{background:var(--btn-on);color:var(--btn-on-ink);font-weight:600}
+.seg button:focus-visible,.views button:focus-visible,#q:focus-visible{outline:2px solid #1F7A6B;outline-offset:1px}
+.seg small{display:block;font-size:.64rem;opacity:.7;font-weight:400}
+#q{width:100%;box-sizing:border-box;font:inherit;font-size:.82rem;padding:7px 9px;border:1px solid var(--edge);border-radius:8px;background:var(--btn);color:var(--ink)}
+.legend{display:grid;gap:3px 8px;grid-template-columns:auto 1fr;font-size:.72rem;color:var(--muted);margin-top:8px}
+.bar{display:grid;height:11px;border-radius:3px;overflow:hidden}
+.ticks{display:grid;font-size:.66rem;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+.ticks span{transform:translateX(-50%);white-space:nowrap}.ticks span:first-child{transform:none}
+.keys{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.72rem;color:var(--muted);margin-top:7px}
+.keys span{display:inline-flex;align-items:center;gap:5px}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.views{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}
+.views button{font:inherit;font-size:.76rem;padding:5px 9px;border-radius:7px;border:1px solid var(--edge);background:var(--btn);color:var(--ink);cursor:pointer}
+#read{right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding:13px 16px;width:min(310px,calc(100vw - 28px))}
+#read .name{font-size:1rem;font-weight:600;margin:0}
+#read .where{font-size:.74rem;color:var(--muted);margin:2px 0 0}
+#read .big{font-size:1.6rem;font-weight:500;margin:8px 0 0;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stats{display:grid;grid-template-columns:auto auto;gap:3px 14px;font-size:.8rem;margin:8px 0 0;font-variant-numeric:tabular-nums}
+.stats dt{color:var(--muted)}.stats dd{margin:0;text-align:right}
+.stats .up{color:var(--new)}
+.how{font-size:.72rem;color:var(--muted);margin:8px 0 0}
+#err{display:none;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 18px;font-size:.9rem}
+@media (max-width:680px){#head{padding:11px 13px}.sub{display:none}#read{left:14px;right:14px;width:auto}}
+</style>
+</head>
+<body>
+<svg id="map" role="img" aria-label="출발 행정동에서 일정 시간 안에 닿는 지역 지도"></svg>
+<section id="head" class="panel">
+  <h1>일정 시간 안에 닿는 곳</h1>
+  <p class="sub">지도에서 동을 누르면 그 동에서 자동차로 기준 시간 안에 닿는 동을 보여 줘요. 2024년 행정동 경계와 인구 분포로 계산해, 연도 차이는 도로망 변화만 뜻합니다.</p>
+  <div class="row"><input id="q" list="dongs" placeholder="동 이름으로 찾기 (예: 대학동)" autocomplete="off"><datalist id="dongs"></datalist></div>
+  <div class="row"><p class="lab">연도</p><div class="seg" id="year" style="grid-template-columns:1fr 1fr 1.5fr">
+    <button data-v="0" aria-pressed="false">2015</button><button data-v="1" aria-pressed="true">2024</button><button data-v="2" aria-pressed="false">2015→2024 변화</button></div></div>
+  <div class="row"><p class="lab">출발 시간</p><div class="seg" id="slot" style="grid-template-columns:repeat(4,1fr)">
+    <button data-v="0" aria-pressed="true">새벽<small>03:00</small></button><button data-v="1" aria-pressed="false">출근<small>07:45</small></button>
+    <button data-v="2" aria-pressed="false">낮<small>13:00</small></button><button data-v="3" aria-pressed="false">퇴근<small>17:45</small></button></div></div>
+  <div class="row"><p class="lab">기준 시간</p><div class="seg" id="thr" style="grid-template-columns:repeat(4,1fr)">
+    <button data-v="30" aria-pressed="true">30분</button><button data-v="45" aria-pressed="false">45분</button><button data-v="60" aria-pressed="false">60분</button><button data-v="90" aria-pressed="false">90분</button></div></div>
+  <div id="legend"></div>
+  <div class="views" role="group" aria-label="보기 범위">
+    <button data-v="fit">출발 동 주변</button><button data-v="metro">수도권</button><button data-v="all">전국</button>
+  </div>
+</section>
+<section id="read" class="panel" aria-live="polite"><p class="how">불러오는 중…</p></section>
+<section id="err" class="panel">지도를 불러오지 못했어요. 새로 고침해 보세요.</section>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js"></script>
+<script>
+(async function(){
+const err=()=>{ document.getElementById('err').style.display='block'; };
+if(!window.d3||!window.topojson){ err(); return; }
+let TOPO, META, GEO, MESH, SGG, SIDO;
+try{ [TOPO,META]=await Promise.all([fetch('geo.topo.json').then(r=>r.json()),fetch('meta.json').then(r=>r.json())]); }catch(e){ err(); return; }
+// 이웃 동이 경계선을 함께 쓰는 형식(TopoJSON): 동 채우기와, 동 사이 경계선(한 번씩만)을 따로 만든다
+{ const ix=new Map(META.cd.map((c,i)=>[c,i])); GEO=topojson.feature(TOPO,TOPO.objects.dong);
+  GEO.features=GEO.features.filter(f=>ix.has(f.properties.ADM_CD)); GEO.features.forEach(f=>{ f.id=ix.get(f.properties.ADM_CD); });
+  MESH=topojson.mesh(TOPO,TOPO.objects.dong,(a,b)=>a!==b);
+  const cd=f=>f.properties.ADM_CD;
+  SGG=topojson.mesh(TOPO,TOPO.objects.dong,(a,b)=>a!==b&&cd(a).slice(0,5)!==cd(b).slice(0,5));
+  SIDO=topojson.mesh(TOPO,TOPO.objects.dong,(a,b)=>a!==b&&cd(a).slice(0,2)!==cd(b).slice(0,2)); }
+const F=META.F, B=META.B, SL=["새벽","출근","낮","퇴근"];
+const S={origin:META.default, year:1, slot:0, thr:30, row:null};
+const hp=new URLSearchParams(location.hash.slice(1)); if(hp.has('o')){ const h=+hp.get('o'); if(Number.isInteger(h)&&h>=0&&h<F) S.origin=h; }   // 주소 끝 #o=번호 로 출발 동 지정
+// ---------- 색
+const TIME=["#063A36","#0B5C55","#1F7A6B","#4E9F7F","#93C393","#CFE0B5"];
+const CHG={big:"#0B5C55",mid:"#3F8E7E",small:"#93C393"};
+const tcolor=(t)=>{ if(t==null) return "var(--nodata)"; if(t>S.thr) return "var(--out)"; return TIME[Math.min(5,Math.floor(t/(S.thr/6)))]; };
+function ccat(a,b){ // a = 2015, b = 2024
+  if(a==null||b==null) return "na"; const ia=a<=S.thr, ib=b<=S.thr;
+  if(!ia&&!ib) return "out"; if(!ia&&ib) return "new"; if(ia&&!ib) return "lost";
+  const d=a-b; if(d>=10) return "big"; if(d>=5) return "mid"; if(d>=2) return "small"; if(d>-2) return "same"; return "slow"; }
+const CC={na:"var(--nodata)",out:"var(--out)",new:"var(--new)",lost:"var(--lost)",big:CHG.big,mid:CHG.mid,small:CHG.small,same:"var(--same)",slow:"var(--slow)"};
+// ---------- 데이터 (동 32개씩 묶은 파일에서 출발 동의 행만)
+const cache=new Map();
+async function loadRow(i){ const b=Math.floor(i/B);
+  if(!cache.has(b)) cache.set(b,fetch(`rows/b${String(b).padStart(3,'0')}.bin`).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(a=>new Uint8Array(a)));
+  const u=await cache.get(b); const o=(i%B)*8*F; return u.subarray(o,o+8*F); }
+const tv=(k,i)=>{ const v=S.row[k*F+i]; return v===255?null:v; };
+const t15=i=>tv(S.slot,i), t24=i=>tv(4+S.slot,i), tyear=i=>tv(S.year*4+S.slot,i);
+// ---------- 지도
+const svg=d3.select("#map"), g=svg.append("g");
+const proj=d3.geoIdentity().reflectY(true), path=d3.geoPath(proj);
+const dongs=g.append("g").selectAll("path").data(GEO.features).join("path").attr("class","dong");
+const borders=g.append("path").attr("id","borders");
+const sggL=g.append("path").attr("id","sgg").attr("class","lvl"), sidoC=g.append("path").attr("id","sidoCase").attr("class","lvl"), sidoL=g.append("path").attr("id","sido").attr("class","lvl");
+const hi=g.append("path").attr("id","hi");
+const ring=g.append("circle").style("fill","none").style("stroke","var(--hi)").style("pointer-events","none"), dot=g.append("circle").style("fill","var(--hi)").style("pointer-events","none");
+let W=0,H=0,left=0,K=1;
+function marker(){ const [x,y]=proj([META.cx[S.origin],META.cy[S.origin]]); ring.attr("cx",x).attr("cy",y).attr("r",9/K).attr("stroke-width",2/K); dot.attr("cx",x).attr("cy",y).attr("r",3/K); }
+const zoom=d3.zoom().scaleExtent([1,120]).on("zoom",e=>{ g.attr("transform",e.transform); K=e.transform.k; marker(); borders.style("opacity",Math.min(1,0.15+K/8)); sggL.style("opacity",Math.min(1,0.45+K/6)); });
+svg.call(zoom).on("dblclick.zoom",null);
+const reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function toBox(b,dur){ const [x0,y1]=proj([b[0],b[1]]), [x1,y0]=proj([b[2],b[3]]);
+  const k=Math.min(120,0.85/Math.max((x1-x0)/(W-left),(y1-y0)/H));
+  svg.transition().duration(reduce?0:dur).call(zoom.transform,d3.zoomIdentity.translate(left+(W-left)/2,H/2).scale(k).translate(-(x0+x1)/2,-(y0+y1)/2)); }
+function reachBox(){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,n=0;
+  for(let i=0;i<F;i++){ const a=S.year===2? Math.min(t15(i)??999,t24(i)??999) : (tyear(i)??999); if(a<=S.thr){ x0=Math.min(x0,META.cx[i]); x1=Math.max(x1,META.cx[i]); y0=Math.min(y0,META.cy[i]); y1=Math.max(y1,META.cy[i]); n++; } }
+  if(!n){ x0=META.cx[S.origin]-20000; x1=x0+40000; y0=META.cy[S.origin]-20000; y1=y0+40000; }
+  const px=(x1-x0)*0.12+3000, py=(y1-y0)*0.12+3000; return [x0-px,y0-py,x1+px,y1+py]; }
+let pendingFit=true;
+function draw(){ const r=svg.node().getBoundingClientRect(); if(r.width<50||r.height<50) return;
+  if(Math.abs(r.width-W)<1&&Math.abs(r.height-H)<1) return; W=r.width; H=r.height;
+  svg.attr("viewBox",`0 0 ${W} ${H}`); left=W>780?420:0; const pad=Math.min(W,H)*0.04;
+  const top=W>780?0:Math.min(360,H*0.45), bottom=W>780?0:Math.min(170,H*0.22);
+  proj.fitExtent([[left+pad,top+pad],[W-pad,H-bottom-pad]],GEO); dongs.attr("d",path); borders.attr("d",path(MESH)); sggL.attr("d",path(SGG)); sidoC.attr("d",path(SIDO)); sidoL.attr("d",path(SIDO)); hi.attr("d",null); marker();
+  if(S.row) toBox(reachBox(),0); else svg.call(zoom.transform,d3.zoomIdentity); }
+new ResizeObserver(draw).observe(svg.node()); draw();
+// ---------- 범례
+const LINES=`<span><i class="ln" style="border-top:1.5px solid var(--sido)"></i>시도 경계</span><span><i class="ln" style="border-top:1px solid var(--sgg)"></i>시군구 경계</span>`;
+function legend(){ const L=d3.select("#legend").html("");
+  if(S.year<2){ const w=S.thr/6, tk=[...Array(7).keys()].map(k=>k===0?"0":Math.round(k*w)+"분");
+    L.append("div").attr("class","bar").style("grid-template-columns","repeat(6,1fr)").selectAll("span").data(TIME).join("span").style("background",c=>c);
+    L.append("div").attr("class","ticks").style("grid-template-columns","repeat(6,1fr)").selectAll("span").data(tk.slice(0,6)).join("span").text(t=>t);
+    L.append("div").attr("class","keys").html(`<span><i class="sw" style="background:var(--out)"></i>${S.thr}분 밖</span><span><i class="sw" style="background:var(--nodata)"></i>자료 없음</span>`+LINES); }
+  else { L.append("div").attr("class","keys").html(
+    `<span><i class="sw" style="background:var(--new)"></i>새로 닿게 된 동</span><span><i class="sw" style="background:${CHG.big}"></i>10분 이상 단축</span>`+
+    `<span><i class="sw" style="background:${CHG.mid}"></i>5~10분</span><span><i class="sw" style="background:${CHG.small}"></i>2~5분</span>`+
+    `<span><i class="sw" style="background:var(--same)"></i>변화 없음(±2분)</span><span><i class="sw" style="background:var(--slow)"></i>2분 넘게 늘어남</span>`+
+    `<span><i class="sw" style="background:var(--lost)"></i>기준 밖으로 벗어남</span><span><i class="sw" style="background:var(--out)"></i>두 해 모두 ${S.thr}분 밖</span>`+LINES); } }
+// ---------- 색칠과 요약
+const man=v=>{ if(v>=1e8) return (v/1e8).toFixed(1).replace(/\.0$/,"")+"억"; if(v>=1e4){ const m=v/1e4; return (m>=100?Math.round(m).toLocaleString():m.toFixed(1).replace(/\.0$/,""))+"만"; } return Math.round(v).toLocaleString(); };
+const fmt=m=>{ if(m==null) return "—"; if(m>=254) return "4시간 14분 이상"; if(m<60) return m+"분"; const h=Math.floor(m/60), r=m%60; return r?`${h}시간 ${r}분`:`${h}시간`; };
+function sums(f){ let n=0,p=0,j=0; for(let i=0;i<F;i++){ const t=f(i); if(t!=null&&t<=S.thr){ n++; p+=META.p[i]; j+=META.j[i]; } } return {n,p,j}; }
+function paint(){ if(!S.row) return;
+  const fc=S.year<2? (d=>tcolor(tyear(d.id))) : (d=>CC[ccat(t15(d.id),t24(d.id))]);
+  dongs.style("fill",fc).style("stroke",fc); }
+function summary(){ if(!S.row) return; const o=S.origin, R=d3.select("#read");
+  const head=`<p class="name">${META.n[o]}에서 ${SL[S.slot]}에 출발</p><p class="where">${META.s[o]} ${META.g[o]}, 기준 ${S.thr}분</p>`;
+  if(S.year<2){ const s=sums(tyear);
+    R.html(head+`<dl class="stats"><dt>닿는 동</dt><dd>${s.n.toLocaleString()}곳</dd><dt>그 동들의 인구</dt><dd>${man(s.p)}명</dd><dt>그 동들의 일자리</dt><dd>${man(s.j)}개</dd></dl>
+    <p class="how">${S.year===0?"2015":"2024"}년 도로망. 다른 동을 누르면 출발 동이 바뀌어요.</p>`); }
+  else { const a=sums(t15), b=sums(t24), dd=(x,y)=>{ const d=y-x; return `<dd class="${d>0?"up":""}">${d>0?"+":d<0?"−":""}${d===0?"변화 없음":(Math.abs(d)>=1e4?man(Math.abs(d)):Math.abs(d).toLocaleString())}</dd>`; };
+    let nw=0; for(let i=0;i<F;i++) if(ccat(t15(i),t24(i))==="new") nw++;
+    R.html(head+`<dl class="stats"><dt>닿는 동 (2015 → 2024)</dt><dd>${a.n.toLocaleString()} → ${b.n.toLocaleString()}곳</dd><dt>늘어난 동</dt>${dd(a.n,b.n)}
+    <dt>닿는 인구</dt><dd>${man(a.p)} → ${man(b.p)}명</dd><dt>닿는 일자리</dt><dd>${man(a.j)} → ${man(b.j)}개</dd><dt>새로 닿게 된 동</dt><dd class="up">${nw.toLocaleString()}곳</dd></dl>
+    <p class="how">인구·일자리는 두 해 모두 2024년 값이라, 차이는 도로망 변화만 뜻해요.</p>`); } }
+function showDong(i){ const R=d3.select("#read");
+  if(S.year<2){ const t=tyear(i); R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(t)}</p><p class="how">${META.n[S.origin]}에서 ${SL[S.slot]}에 출발, ${S.year===0?"2015":"2024"}년</p>`); }
+  else { const a=t15(i), b=t24(i); const d=(a!=null&&b!=null)?a-b:null;
+    R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(a)} → ${fmt(b)}</p>
+    <p class="how">${d==null?"":d>=2?`${d}분 빨라졌어요`:d<=-2?`${-d}분 늘었어요`:"거의 같아요"} (${META.n[S.origin]}에서 ${SL[S.slot]}에 출발)</p>`); } }
+async function setOrigin(i,fit){ S.origin=i; marker(); history.replaceState(null,"",`#o=${i}`);
+  d3.select("#read").html(`<p class="how">${META.n[i]}의 자료를 불러오는 중…</p>`);
+  try{ S.row=await loadRow(i); }catch(e){ d3.select("#read").html(`<p class="how">자료를 불러오지 못했어요.</p>`); return; }
+  if(S.origin!==i) return; paint(); summary(); if(fit) toBox(reachBox(),650); }
+// ---------- 조작
+dongs.on("pointerenter",(e,d)=>{ if(!S.row) return; hi.attr("d",path(d)); showDong(d.id); })
+     .on("click",(e,d)=>setOrigin(d.id,false));
+svg.on("pointerleave",()=>{ hi.attr("d",null); summary(); });
+function seg(id,key,num){ const bs=d3.selectAll(`#${id} button`);
+  bs.on("click",function(){ bs.attr("aria-pressed","false"); d3.select(this).attr("aria-pressed","true"); S[key]=num?+this.dataset.v:this.dataset.v; legend(); paint(); summary(); }); }
+seg("year","year",true); seg("slot","slot",true); seg("thr","thr",true);
+d3.selectAll(".views button").on("click",function(){ const v=this.dataset.v;
+  if(v==="all") svg.transition().duration(reduce?0:650).call(zoom.transform,d3.zoomIdentity); else if(v==="metro") toBox(META.views.metro,650); else toBox(reachBox(),650); });
+const labels=META.n.map((n,i)=>`${n} (${META.g[i]}, ${META.s[i]})`);
+d3.select("#dongs").selectAll("option").data(labels).join("option").attr("value",d=>d);
+d3.select("#q").on("change",function(){ const i=labels.indexOf(this.value); if(i>=0){ setOrigin(i,true); this.blur(); } });
+legend(); await setOrigin(S.origin,false); toBox(reachBox(),0);
+})();
+</script>
+</body>
+</html>
