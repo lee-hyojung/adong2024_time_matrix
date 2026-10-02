@@ -63,6 +63,8 @@ h1{font-size:1.15rem;line-height:1.3;font-weight:600;margin:0 0 3px;letter-spaci
 .stats dt{color:var(--muted)}.stats dd{margin:0;text-align:right}
 .stats .up{color:var(--new)}
 .how{font-size:.72rem;color:var(--muted);margin:8px 0 0}
+.mnote{font-size:.72rem;color:var(--muted);margin:5px 0 0;line-height:1.45}.mnote:empty{display:none}
+.seg button[disabled]{opacity:.35;cursor:not-allowed}
 #err{display:none;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 18px;font-size:.9rem;max-width:min(460px,calc(100vw - 40px));line-height:1.5}
 #err small{color:var(--muted);font-size:.78rem}
 .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
@@ -94,8 +96,11 @@ h1{font-size:1.15rem;line-height:1.3;font-weight:600;margin:0 0 3px;letter-spaci
   <div class="top"><h1>일정 시간 안에 닿는 곳</h1><button id="toggle" class="toggle" aria-expanded="false" aria-controls="ctrl">설정 ▾</button></div>
   <p class="cur" id="cur"></p>
   <div id="ctrl">
-  <p class="sub">지도에서 동을 누르면 그 동에서 자동차로 기준 시간 안에 닿는 동을 보여 줘요. 2024년 행정동 경계와 인구 분포로 계산해, 연도 차이는 도로망 변화만 뜻합니다.</p>
+  <p class="sub">지도에서 동을 누르면 그 동에서 기준 시간 안에 닿는 동을 보여 줘요. 대중교통은 철도(지하철·광역철도·KTX 등)와 걷기이고, 기차역까지는 차로 가요. 2024년 행정동 경계와 인구 분포로 계산해, 연도 차이는 도로망 변화만 뜻합니다.</p>
   <div class="row"><input id="q" list="dongs" placeholder="동 이름으로 찾기 (예: 대학동)" autocomplete="off"><datalist id="dongs"></datalist></div>
+  <div class="row"><p class="lab">이동 수단</p><div class="seg" id="mode" style="grid-template-columns:repeat(3,1fr)">
+    <button data-v="car" aria-pressed="true">자동차</button><button data-v="pt" aria-pressed="false">대중교통<small>철도 + 걷기</small></button><button data-v="best" aria-pressed="false">빠른 쪽<small>둘 중 짧은 것</small></button></div>
+    <p class="mnote" id="mnote"></p></div>
   <div class="row"><p class="lab">연도</p><div class="seg" id="year" style="grid-template-columns:1fr 1fr 1.5fr">
     <button data-v="0" aria-pressed="false">2015</button><button data-v="1" aria-pressed="true">2024</button><button data-v="2" aria-pressed="false">2015→2024 변화</button></div></div>
   <div class="row"><p class="lab">출발 시간</p><div class="seg" id="slot" style="grid-template-columns:repeat(4,1fr)">
@@ -132,8 +137,9 @@ if(!TOPO.objects||!TOPO.objects.dong){ err('geo.topo.json 이 예전 형식이�
   const cd=f=>f.properties.ADM_CD;
   SGG=topojson.mesh(TOPO,TOPO.objects.dong,(a,b)=>a!==b&&cd(a).slice(0,5)!==cd(b).slice(0,5));
   SIDO=topojson.mesh(TOPO,TOPO.objects.dong,(a,b)=>a!==b&&cd(a).slice(0,2)!==cd(b).slice(0,2)); }
-const F=META.F, B=META.B, SL=["새벽","출근","낮","퇴근"];
-const S={origin:META.default, year:1, slot:0, thr:30, row:null};
+const F=META.F, B=META.B, NC=META.NC||8, SL=["새벽","출근","낮","퇴근"];
+const MODE={car:"자동차",pt:"대중교통",best:"빠른 쪽"}, RO={car:"자동차로",pt:"대중교통으로",best:"빠른 수단으로"};
+const S={origin:META.default, year:1, slot:0, thr:30, mode:"car", row:null};
 const hp=new URLSearchParams(location.hash.slice(1)); if(hp.has('o')){ const h=+hp.get('o'); if(Number.isInteger(h)&&h>=0&&h<F) S.origin=h; }   // 주소 끝 #o=번호 로 출발 동 지정
 // ---------- 색
 const TIME=["#063A36","#0B5C55","#1F7A6B","#4E9F7F","#93C393","#CFE0B5"];
@@ -148,9 +154,11 @@ const CC={na:"var(--nodata)",out:"var(--out)",new:"var(--new)",lost:"var(--lost)
 const cache=new Map();
 async function loadRow(i){ const b=Math.floor(i/B);
   if(!cache.has(b)) cache.set(b,fetch(`rows/b${String(b).padStart(3,'0')}.bin`).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(a=>new Uint8Array(a)));
-  const u=await cache.get(b); const o=(i%B)*8*F; return u.subarray(o,o+8*F); }
+  const u=await cache.get(b); const o=(i%B)*NC*F; return u.subarray(o,o+NC*F); }
 const tv=(k,i)=>{ const v=S.row[k*F+i]; return v===255?null:v; };
-const t15=i=>tv(S.slot,i), t24=i=>tv(4+S.slot,i), tyear=i=>tv(S.year*4+S.slot,i);
+// 출발 동마다 [2015, 2024] x [자동차 새벽·출근·낮·퇴근, 대중교통 출근·낮·퇴근, 빠른 쪽 출근·낮·퇴근] = 20가지. 새벽은 자동차만.
+const CI=(y,m,s)=> y*10 + ((m==="car"||s===0) ? s : (m==="pt"?4:7)+s-1);
+const t15=i=>tv(CI(0,S.mode,S.slot),i), t24=i=>tv(CI(1,S.mode,S.slot),i), tyear=i=>tv(CI(S.year,S.mode,S.slot),i);
 // ---------- 지도
 const svg=d3.select("#map"), g=svg.append("g");
 const proj=d3.geoIdentity().reflectY(true), path=d3.geoPath(proj);
@@ -199,20 +207,21 @@ function paint(){ if(!S.row) return;
   const fc=S.year<2? (d=>tcolor(tyear(d.id))) : (d=>CC[ccat(t15(d.id),t24(d.id))]);
   dongs.style("fill",fc).style("stroke",fc); }
 function summary(){ if(!S.row) return; updCur(); const o=S.origin, R=d3.select("#readc");
-  const head=`<p class="name">${META.n[o]}에서 ${SL[S.slot]}에 출발</p><p class="where">${META.s[o]} ${META.g[o]}, 기준 ${S.thr}분</p>`;
+  const head=`<p class="name">${META.n[o]}에서 ${SL[S.slot]}에 ${RO[S.mode]} 출발</p><p class="where">${META.s[o]} ${META.g[o]}, 기준 ${S.thr}분</p>`;
   if(S.year<2){ const s=sums(tyear);
     R.html(head+`<dl class="stats"><dt>닿는 동</dt><dd>${s.n.toLocaleString()}곳</dd><dt>그 동들의 인구</dt><dd>${man(s.p)}명</dd><dt>그 동들의 일자리</dt><dd>${man(s.j)}개</dd></dl>
-    <p class="how">${S.year===0?"2015":"2024"}년 도로망. 다른 동을 누르면 출발 동이 바뀌어요.</p>`); }
+    <p class="how">${S.year===0?"2015":"2024"}년 도로·철도망. 다른 동을 누르면 출발 동이 바뀌어요.</p>`); }
   else { const a=sums(t15), b=sums(t24), dd=(x,y)=>{ const d=y-x; return `<dd class="${d>0?"up":""}">${d>0?"+":d<0?"−":""}${d===0?"변화 없음":(Math.abs(d)>=1e4?man(Math.abs(d)):Math.abs(d).toLocaleString())}</dd>`; };
     let nw=0; for(let i=0;i<F;i++) if(ccat(t15(i),t24(i))==="new") nw++;
     R.html(head+`<dl class="stats"><dt>닿는 동 (2015 → 2024)</dt><dd>${a.n.toLocaleString()} → ${b.n.toLocaleString()}곳</dd><dt>늘어난 동</dt>${dd(a.n,b.n)}
     <dt>닿는 인구</dt><dd>${man(a.p)} → ${man(b.p)}명</dd><dt>닿는 일자리</dt><dd>${man(a.j)} → ${man(b.j)}개</dd><dt>새로 닿게 된 동</dt><dd class="up">${nw.toLocaleString()}곳</dd></dl>
     <p class="how">인구·일자리는 두 해 모두 2024년 값이라, 차이는 도로망 변화만 뜻해요.</p>`); } }
 function showDong(i){ const R=d3.select("#readc");
-  if(S.year<2){ const t=tyear(i); R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(t)}</p><p class="how">${META.n[S.origin]}에서 ${SL[S.slot]}에 출발, ${S.year===0?"2015":"2024"}년</p>`); }
+  const tri=y=> S.slot===0 ? "" : `<dl class="stats">${["car","pt","best"].map(m=>`<dt${m===S.mode?' style="color:var(--ink);font-weight:600"':""}>${MODE[m]}</dt><dd>${fmt(tv(CI(y,m,S.slot),i))}</dd>`).join("")}</dl>`;
+  if(S.year<2){ const t=tyear(i); R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(t)}</p>${tri(S.year)}<p class="how">${META.n[S.origin]}에서 ${SL[S.slot]}에 ${RO[S.mode]} 출발, ${S.year===0?"2015":"2024"}년</p>`); }
   else { const a=t15(i), b=t24(i); const d=(a!=null&&b!=null)?a-b:null;
     R.html(`<p class="name">${META.n[i]}</p><p class="where">${META.s[i]} ${META.g[i]}</p><p class="big">${fmt(a)} → ${fmt(b)}</p>
-    <p class="how">${d==null?"":d>=2?`${d}분 빨라졌어요`:d<=-2?`${-d}분 늘었어요`:"거의 같아요"} (${META.n[S.origin]}에서 ${SL[S.slot]}에 출발)</p>`); } }
+    <p class="how">${d==null?"":d>=2?`${d}분 빨라졌어요`:d<=-2?`${-d}분 늘었어요`:"거의 같아요"} (${META.n[S.origin]}에서 ${SL[S.slot]}에 ${RO[S.mode]} 출발)</p>`); } }
 async function setOrigin(i,fit){ S.origin=i; marker(); history.replaceState(null,"",`#o=${i}`);
   d3.select("#readc").html(`<p class="how">${META.n[i]}의 자료를 불러오는 중…</p>`);
   try{ S.row=await loadRow(i); }catch(e){ d3.select("#readc").html(`<p class="how">자료를 불러오지 못했어요.</p>`); return; }
@@ -224,12 +233,18 @@ svg.on("pointerleave",()=>{ hi.attr("d",null); summary(); });
 function seg(id,key,num){ const bs=d3.selectAll(`#${id} button`);
   bs.on("click",function(){ bs.attr("aria-pressed","false"); d3.select(this).attr("aria-pressed","true"); S[key]=num?+this.dataset.v:this.dataset.v; legend(); paint(); summary(); }); }
 seg("year","year",true); seg("slot","slot",true); seg("thr","thr",true);
+const NOTE={car:"",pt:"새벽 3시에는 전철이 다니지 않아 새벽은 고를 수 없어요. 버스가 빠져 있어 역에서 먼 곳은 실제보다 오래 걸리게 나와요.",best:"자리마다 자동차와 대중교통 중 짧은 쪽이에요. 새벽은 자동차와 같아요."};
+function setMode(m){ S.mode=m; d3.selectAll("#mode button").attr("aria-pressed",function(){ return String(this.dataset.v===m); });
+  const nb=d3.select('#slot button[data-v="0"]'); nb.attr("disabled",m==="pt"?"":null);
+  if(m==="pt"&&S.slot===0){ S.slot=1; d3.selectAll("#slot button").attr("aria-pressed",function(){ return String(this.dataset.v==="1"); }); }
+  d3.select("#mnote").text(NOTE[m]); legend(); paint(); summary(); }
+d3.selectAll("#mode button").on("click",function(){ setMode(this.dataset.v); });
 d3.selectAll(".views button").on("click",function(){ const v=this.dataset.v;
   if(v==="all") svg.transition().duration(reduce?0:650).call(zoom.transform,d3.zoomIdentity); else if(v==="metro") toBox(META.views.metro,650); else toBox(reachBox(),650); });
 const labels=META.n.map((n,i)=>`${n} (${META.g[i]}, ${META.s[i]})`);
 d3.select("#dongs").selectAll("option").data(labels).join("option").attr("value",d=>d);
 d3.select("#q").on("change",function(){ const i=labels.indexOf(this.value); if(i>=0){ setOrigin(i,true); this.blur(); } });
-const updCur=()=>{ document.getElementById('cur').textContent=`${['2015','2024','2015→2024 변화'][S.year]} · ${SL[S.slot]} · ${S.thr}분 · ${META.n[S.origin]}`; };
+const updCur=()=>{ document.getElementById('cur').textContent=`${MODE[S.mode]} · ${['2015','2024','2015→2024 변화'][S.year]} · ${SL[S.slot]} · ${S.thr}분 · ${META.n[S.origin]}`; };
 const head=document.getElementById('head'), tg=document.getElementById('toggle'), mob=()=>window.matchMedia('(max-width:680px)').matches;
 const setOpen=o=>{ head.classList.toggle('open',o); tg.setAttribute('aria-expanded',String(o)); tg.textContent=o?'접기 ▴':'설정 ▾'; if(o) head.scrollTop=0; };
 tg.addEventListener('click',()=>setOpen(!head.classList.contains('open')));
